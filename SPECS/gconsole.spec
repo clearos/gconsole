@@ -53,11 +53,10 @@
 %endif
 
 
-Summary:        Mozilla Firefox Web browser
-Name:           firefox
+Summary:        ClearOS web console
+Name:           gconsole
 Version:        31.3.0
 Release:        3%{?prever}%{?dist}
-URL:            http://www.mozilla.org/projects/firefox/
 License:        MPLv1.1 or GPLv2+ or LGPLv2+
 Group:          Applications/Internet
 # From ftp://ftp.mozilla.org/pub/firefox/releases/%{version}%{?pretag}/source
@@ -67,7 +66,7 @@ Source1:        firefox-langpacks-%{version}%{?ext_version}-20141126.tar.bz2
 %endif
 Source10:       firefox-mozconfig
 Source11:       firefox-mozconfig-branded
-Source12:       firefox-centos-default-prefs.js
+Source12:       firefox-clearos-default-prefs.js
 Source20:       firefox.desktop
 Source21:       firefox.sh.in
 Source23:       firefox.1
@@ -90,6 +89,10 @@ Patch16:        firefox-enable-plugins.patch
 # Upstream patches
 Patch200:       firefox-duckduckgo.patch
 
+# ClearOS
+Patch1000:      gconsole-31-clearos.patch
+
+
 %if %{official_branding}
 # Required by Mozilla Corporation
 
@@ -101,12 +104,12 @@ Patch200:       firefox-duckduckgo.patch
 
 # ---------------------------------------------------
 BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
-BuildRequires:  desktop-file-utils
+# BuildRequires:  desktop-file-utils
 
 BuildRequires:  mesa-libGL-devel
-BuildRequires:  system-bookmarks
-Requires:       system-bookmarks
-Requires:       redhat-indexhtml
+# BuildRequires:  system-bookmarks
+# Requires:       system-bookmarks
+# Requires:       redhat-indexhtml
 %if %{?system_sqlite}
 BuildRequires:  sqlite-devel >= %{sqlite_version}
 Requires:       sqlite >= %{sqlite_build_version}
@@ -165,18 +168,16 @@ Requires:       liberation-fonts-common
 Requires:       liberation-sans-fonts
 
 BuildRequires:  autoconf213
-Obsoletes:      mozilla <= 37:1.7.13
-Obsoletes:      firefox < 24.1.0
-Conflicts:      firefox < 24.1.0
-Provides:       webclient
+# Obsoletes:      mozilla <= 37:1.7.13
+Obsoletes:      gconsole < 24.1.0
+Conflicts:      gconsole < 24.1.0
 
 
 %define _use_internal_dependency_generator 0
 %define __find_requires %{SOURCE100}
 
 %description
-Mozilla Firefox is an open-source web browser, designed for standards
-compliance, performance and portability.
+ClearOS web console built from Mozilla Firefox.
 
 #---------------------------------------------------------------------
 
@@ -213,6 +214,8 @@ cd %{tarballdir}
 
 %endif
 
+%patch1000 -p1 -b .clearos
+
 
 %{__rm} -f .mozconfig
 %{__cp} %{SOURCE10} .mozconfig
@@ -220,6 +223,12 @@ cd %{tarballdir}
 %{__cat} %{SOURCE11} >> .mozconfig
 %endif
 %{__cp} %{SOURCE24} mozilla-api-key
+
+# Change binary name (ClearOS)
+cat << __EOF__ >> .mozconfig
+ac_add_options --with-app-name=gconsole
+ac_add_options --with-user-appdir=.gconsole
+__EOF__
 
 %if %{?system_sqlite}
 echo "ac_add_options --enable-system-sqlite" >> .mozconfig
@@ -285,6 +294,7 @@ echo "ac_add_options --enable-dtrace" >> .mozconfig
 %else
 echo "ac_add_options --disable-debug" >> .mozconfig
 echo "ac_add_options --enable-optimize" >> .mozconfig
+echo "ac_add_options --enable-release" >> .mozconfig
 %endif
 
 #---------------------------------------------------------------------
@@ -351,7 +361,7 @@ cd %{tarballdir}
     browser/installer/package-manifest.in
 
 # set up our default bookmarks
-%{__cp} -p %{default_bookmarks_file} objdir/dist/bin/browser/defaults/profile/bookmarks.html
+# %{__cp} -p %{default_bookmarks_file} objdir/dist/bin/browser/defaults/profile/bookmarks.html
 
 # Make sure locale works for langpacks
 %{__cat} > objdir/dist/bin/browser/defaults/preferences/firefox-l10n.js << EOF
@@ -360,28 +370,12 @@ EOF
 
 DESTDIR=$RPM_BUILD_ROOT make -C objdir install
 
-%{__mkdir_p} $RPM_BUILD_ROOT{%{_libdir},%{_bindir},%{_datadir}/applications}
-
-desktop-file-install \
-  --dir $RPM_BUILD_ROOT%{_datadir}/applications \
-  --add-category WebBrowser \
-  --add-category Network \
-  %{SOURCE20}
-
-# set up the firefox start script
-rm -rf $RPM_BUILD_ROOT%{_bindir}/firefox
-cp %{SOURCE21} $RPM_BUILD_ROOT%{_bindir}/firefox
-%{__chmod} 755 $RPM_BUILD_ROOT%{_bindir}/firefox
-
-%{__install} -p -D -m 644 %{SOURCE23} $RPM_BUILD_ROOT%{_mandir}/man1/firefox.1
+# set up the start script
+rm -rf $RPM_BUILD_ROOT%{_bindir}/gconsole
+cp %{SOURCE21} $RPM_BUILD_ROOT%{_bindir}/gconsole
+%{__chmod} 755 $RPM_BUILD_ROOT%{_bindir}/gconsole
 
 %{__rm} -f $RPM_BUILD_ROOT/%{mozappdir}/firefox-config
-
-for s in 16 22 24 32 48 256; do
-    %{__mkdir_p} $RPM_BUILD_ROOT%{_datadir}/icons/hicolor/${s}x${s}/apps
-    %{__cp} -p browser/branding/official/default${s}.png \
-               $RPM_BUILD_ROOT%{_datadir}/icons/hicolor/${s}x${s}/apps/firefox.png
-done
 
 echo > ../%{name}.lang
 %if %{build_langpacks}
@@ -429,20 +423,6 @@ ln -s %{_datadir}/myspell ${RPM_BUILD_ROOT}%{mozappdir}/dictionaries
 
 #---------------------------------------------------------------------
 
-%post
-update-desktop-database &> /dev/null || :
-touch --no-create %{_datadir}/icons/hicolor &>/dev/null || :
-if [ -x %{_bindir}/gtk-update-icon-cache ]; then
-  %{_bindir}/gtk-update-icon-cache --quiet %{_datadir}/icons/hicolor || :
-fi
-
-%postun
-if [ $1 -eq 0 ] ; then
-    touch --no-create %{_datadir}/icons/hicolor &>/dev/null
-    gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
-fi
-update-desktop-database &> /dev/null || :
-
 %preun
 # is it a final removal?
 if [ $1 -eq 0 ]; then
@@ -452,22 +432,11 @@ if [ $1 -eq 0 ]; then
   %{__rm} -rf %{mozappdir}/plugins
 fi
 
-%posttrans
-gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
-
 %files -f %{name}.lang
 %defattr(-,root,root,-)
-%{_bindir}/firefox
-%doc %{_mandir}/man1/*
+%{_bindir}/gconsole
 %dir %{_datadir}/mozilla/extensions/%{firefox_app_id}
 %dir %{_libdir}/mozilla/extensions/%{firefox_app_id}
-%{_datadir}/icons/hicolor/16x16/apps/firefox.png
-%{_datadir}/icons/hicolor/48x48/apps/firefox.png
-%{_datadir}/icons/hicolor/22x22/apps/firefox.png
-%{_datadir}/icons/hicolor/24x24/apps/firefox.png
-%{_datadir}/icons/hicolor/256x256/apps/firefox.png
-%{_datadir}/icons/hicolor/32x32/apps/firefox.png
-%{_datadir}/applications/%{name}.desktop
 %dir %{mozappdir}
 %doc %{mozappdir}/LICENSE
 %{mozappdir}/browser/chrome
@@ -482,8 +451,8 @@ gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
 %{mozappdir}/browser/icons
 %{mozappdir}/browser/searchplugins
 %{mozappdir}/browser/omni.ja
-%{mozappdir}/firefox
-%{mozappdir}/firefox-bin
+%{mozappdir}/gconsole
+%{mozappdir}/gconsole-bin
 %{mozappdir}/run-mozilla.sh
 %{mozappdir}/application.ini
 %dir %{mozappdir}/defaults/preferences
@@ -516,8 +485,10 @@ gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
 #---------------------------------------------------------------------
 
 %changelog
-* Tue Dec 02 2014 CentOS Sources <bugs@centos.org> - 31.3.0-3.el7.centos
-- CentOS default prefs
+* Wed Dec 10 2014 ClearFoundation <developer@clearfoundation.com> - 31.3.0-3.clear
+- Convert firefox to gconsole
+- Remove desktop shortcut and icons
+- Remove custom bookmarks
 
 * Sat Nov 29 2014 Martin Stransky <stransky@redhat.com> - 31.3.0-3
 - Fixed geolocation key location

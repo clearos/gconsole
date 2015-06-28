@@ -1,0 +1,263 @@
+diff -rup mozilla-esr31/browser/base/content/browser.xul mozilla-esr31-clearos/browser/base/content/browser.xul
+--- mozilla-esr31/browser/base/content/browser.xul	2014-10-11 14:58:23.000000000 +0000
++++ mozilla-esr31-clearos/browser/base/content/browser.xul	2014-10-24 21:01:48.951333584 +0000
+@@ -514,7 +514,7 @@
+ 
+   <toolbox id="navigator-toolbox" mode="icons">
+     <!-- Menu -->
+-    <toolbar type="menubar" id="toolbar-menubar" class="chromeclass-menubar" customizable="true"
++    <toolbar type="menubar" hidden="true" id="toolbar-menubar" class="chromeclass-menubar" customizable="true"
+              defaultset="menubar-items"
+              mode="icons" iconsize="small"
+ #ifdef MENUBAR_CAN_AUTOHIDE
+@@ -542,6 +542,7 @@
+     </toolbar>
+ 
+     <toolbar id="TabsToolbar"
++             hidden="true"
+              class="toolbar-primary"
+              fullscreentoolbar="true"
+              customizable="true"
+@@ -626,10 +627,11 @@
+            customization code doesn't get confused.
+       -->
+     <toolbar id="nav-bar" class="toolbar-primary chromeclass-toolbar"
++             hidden="true"
+              aria-label="&navbarCmd.label;"
+-             fullscreentoolbar="true" mode="icons" customizable="true"
++             fullscreentoolbar="false" mode="icons" customizable="false"
+              iconsize="small"
+-             defaultset="urlbar-container,search-container,webrtc-status-button,bookmarks-menu-button,downloads-button,home-button,social-share-button,social-toolbar-item"
++             defaultset="urlbar-container,home-button"
+              customizationtarget="nav-bar-customization-target"
+              overflowable="true"
+              overflowbutton="nav-bar-overflow-button"
+@@ -939,16 +941,16 @@
+       </hbox>
+     </toolbar>
+ 
+-    <toolbarset id="customToolbars" context="toolbar-context-menu"/>
++    <toolbarset id="customToolbars" hidden="true" context="toolbar-context-menu"/>
+ 
+-    <toolbar id="PersonalToolbar"
++    <toolbar id="PersonalToolbar" hidden="true"
+              mode="icons" iconsize="small"
+              class="chromeclass-directories"
+              context="toolbar-context-menu"
+              defaultset="personal-bookmarks"
+              toolbarname="&personalbarCmd.label;" accesskey="&personalbarCmd.accesskey;"
+              collapsed="true"
+-             customizable="true">
++             customizable="false">
+       <toolbaritem id="personal-bookmarks"
+                    title="&bookmarksToolbarItem.label;"
+                    cui-areatype="toolbar"
+@@ -1150,7 +1152,7 @@
+     </hbox>
+   </hbox>
+ 
+-  <vbox id="browser-bottombox" layer="true">
++  <vbox id="browser-bottombox" hidden="true" layer="true">
+     <notificationbox id="global-notificationbox"/>
+     <toolbar id="developer-toolbar"
+              hidden="true">
+diff -rup mozilla-esr31/browser/base/content/nsContextMenu.js mozilla-esr31-clearos/browser/base/content/nsContextMenu.js
+--- mozilla-esr31/browser/base/content/nsContextMenu.js	2014-10-11 14:58:23.000000000 +0000
++++ mozilla-esr31-clearos/browser/base/content/nsContextMenu.js	2014-10-23 21:05:20.074767560 +0000
+@@ -140,7 +140,7 @@ nsContextMenu.prototype = {
+ 
+     var shouldShow = this.onSaveableLink || isMailtoInternal || this.onPlainTextLink;
+     var isWindowPrivate = PrivateBrowsingUtils.isWindowPrivate(window);
+-    this.showItem("context-openlink", shouldShow && !isWindowPrivate);
++    this.showItem("context-openlink", false);
+     this.showItem("context-openlinkprivate", shouldShow);
+     this.showItem("context-openlinkintab", shouldShow);
+     this.showItem("context-openlinkincurrent", this.onPlainTextLink);
+@@ -180,25 +180,22 @@ nsContextMenu.prototype = {
+   },
+ 
+   initSaveItems: function CM_initSaveItems() {
+-    var shouldShow = !(this.onTextInput || this.onLink ||
+-                       this.isContentSelected || this.onImage ||
+-                       this.onCanvas || this.onVideo || this.onAudio);
+-    this.showItem("context-savepage", shouldShow);
++    this.showItem("context-savepage", false);
+ 
+     // Save link depends on whether we're in a link, or selected text matches valid URL pattern.
+-    this.showItem("context-savelink", this.onSaveableLink || this.onPlainTextLink);
++    this.showItem("context-savelink", false);
+ 
+     // Save image depends on having loaded its content, video and audio don't.
+-    this.showItem("context-saveimage", this.onLoadedImage || this.onCanvas);
+-    this.showItem("context-savevideo", this.onVideo);
+-    this.showItem("context-saveaudio", this.onAudio);
++    this.showItem("context-saveimage", false);
++    this.showItem("context-savevideo", false);
++    this.showItem("context-saveaudio", false);
+     this.showItem("context-video-saveimage", this.onVideo);
+     this.setItemAttr("context-savevideo", "disabled", !this.mediaURL);
+     this.setItemAttr("context-saveaudio", "disabled", !this.mediaURL);
+     // Send media URL (but not for canvas, since it's a big data: URL)
+-    this.showItem("context-sendimage", this.onImage);
+-    this.showItem("context-sendvideo", this.onVideo);
+-    this.showItem("context-sendaudio", this.onAudio);
++    this.showItem("context-sendimage", false);
++    this.showItem("context-sendvideo", false);
++    this.showItem("context-sendaudio", false);
+     this.setItemAttr("context-sendvideo", "disabled", !this.mediaURL);
+     this.setItemAttr("context-sendaudio", "disabled", !this.mediaURL);
+   },
+@@ -206,21 +203,16 @@ nsContextMenu.prototype = {
+   initViewItems: function CM_initViewItems() {
+     // View source is always OK, unless in directory listing.
+     this.showItem("context-viewpartialsource-selection",
+-                  this.isContentSelected);
++                  false);
+     this.showItem("context-viewpartialsource-mathml",
+-                  this.onMathML && !this.isContentSelected);
++                  false);
+ 
+-    var shouldShow = !(this.isContentSelected ||
+-                       this.onImage || this.onCanvas ||
+-                       this.onVideo || this.onAudio ||
+-                       this.onLink || this.onTextInput);
+-    var showInspect = !this.onSocial && gPrefService.getBoolPref("devtools.inspector.enabled");
+-    this.showItem("context-viewsource", shouldShow);
+-    this.showItem("context-viewinfo", shouldShow);
+-    this.showItem("inspect-separator", showInspect);
+-    this.showItem("context-inspect", showInspect);
++    this.showItem("context-viewsource", false);
++    this.showItem("context-viewinfo", false);
++    this.showItem("inspect-separator", false);
++    this.showItem("context-inspect", false);
+ 
+-    this.showItem("context-sep-viewsource", shouldShow);
++    this.showItem("context-sep-viewsource", false);
+ 
+     // Set as Desktop background depends on whether an image was clicked on,
+     // and only works if we have a shell service.
+@@ -231,34 +223,24 @@ nsContextMenu.prototype = {
+     if (shell)
+       haveSetDesktopBackground = shell.canSetDesktopBackground;
+ #endif
+-    this.showItem("context-setDesktopBackground",
+-                  haveSetDesktopBackground && this.onLoadedImage);
+-
+-    if (haveSetDesktopBackground && this.onLoadedImage) {
+-      document.getElementById("context-setDesktopBackground")
+-              .disabled = this.disableSetDesktopBackground();
+-    }
++    this.showItem("context-setDesktopBackground", false);
+ 
+     // Reload image depends on an image that's not fully loaded
+-    this.showItem("context-reloadimage", (this.onImage && !this.onCompletedImage));
++    this.showItem("context-reloadimage", false);
+ 
+     // View image depends on having an image that's not standalone
+     // (or is in a frame), or a canvas.
+-    this.showItem("context-viewimage", (this.onImage &&
+-                  (!this.inSyntheticDoc || this.inFrame)) || this.onCanvas);
++    this.showItem("context-viewimage", false);
+ 
+     // View video depends on not having a standalone video.
+-    this.showItem("context-viewvideo", this.onVideo && (!this.inSyntheticDoc || this.inFrame));
++    this.showItem("context-viewvideo", false);
+     this.setItemAttr("context-viewvideo",  "disabled", !this.mediaURL);
+ 
+     // View background image depends on whether there is one, but don't make
+     // background images of a stand-alone media document available.
+-    this.showItem("context-viewbgimage", shouldShow &&
+-                                         !this._hasMultipleBGImages &&
+-                                         !this.inSyntheticDoc);
+-    this.showItem("context-sep-viewbgimage", shouldShow &&
+-                                             !this._hasMultipleBGImages &&
+-                                             !this.inSyntheticDoc);
++    this.showItem("context-viewbgimage", false);
++    this.showItem("context-sep-viewbgimage", false);
++
+     document.getElementById("context-viewbgimage")
+             .disabled = !this.hasBGImage;
+ 
+@@ -268,17 +250,13 @@ nsContextMenu.prototype = {
+ 
+   initMiscItems: function CM_initMiscItems() {
+     // Use "Bookmark This Link" if on a link.
+-    this.showItem("context-bookmarkpage",
+-                  !(this.isContentSelected || this.onTextInput || this.onLink ||
+-                    this.onImage || this.onVideo || this.onAudio || this.onSocial));
+-    this.showItem("context-bookmarklink", (this.onLink && !this.onMailtoLink &&
+-                                           !this.onSocial) || this.onPlainTextLink);
+-    this.showItem("context-keywordfield",
+-                  this.onTextInput && this.onKeywordField);
+-    this.showItem("frame", this.inFrame);
++    this.showItem("context-bookmarkpage", false);
++    this.showItem("context-bookmarklink", false);
++    this.showItem("context-keywordfield", false);
++    this.showItem("frame", false);
+ 
+     let showSearchSelect = (this.isTextSelected || this.onLink) && !this.onImage;
+-    this.showItem("context-searchselect", showSearchSelect);
++    this.showItem("context-searchselect", false);
+     if (showSearchSelect) {
+       this.formatSearchContextItem();
+     }
+@@ -294,7 +272,7 @@ nsContextMenu.prototype = {
+     this.showItem("context-bookmarkframe", !this.inSrcdocFrame);
+     this.showItem("open-frame-sep", !this.inSrcdocFrame);
+ 
+-    this.showItem("frame-sep", this.inFrame && this.isTextSelected);
++    this.showItem("frame-sep", false);
+ 
+     // Hide menu entries for images, show otherwise
+     if (this.inFrame) {
+@@ -394,18 +372,18 @@ nsContextMenu.prototype = {
+     goUpdateGlobalEditMenuItems();
+ 
+     this.showItem("context-undo", this.onTextInput);
+-    this.showItem("context-sep-undo", this.onTextInput);
++    this.showItem("context-sep-undo", false);
+     this.showItem("context-cut", this.onTextInput);
+     this.showItem("context-copy",
+                   this.isContentSelected || this.onTextInput);
+     this.showItem("context-paste", this.onTextInput);
+     this.showItem("context-delete", this.onTextInput);
+-    this.showItem("context-sep-paste", this.onTextInput);
++    this.showItem("context-sep-paste", false);
+     this.showItem("context-selectall", !(this.onLink || this.onImage ||
+                                          this.onVideo || this.onAudio ||
+                                          this.inSyntheticDoc) ||
+                                        this.isDesignMode);
+-    this.showItem("context-sep-selectall", this.isContentSelected );
++    this.showItem("context-sep-selectall", false );
+ 
+     // XXX dr
+     // ------
+@@ -416,22 +394,20 @@ nsContextMenu.prototype = {
+     this.showItem("context-copyemail", this.onMailtoLink);
+ 
+     // Copy link location depends on whether we're on a non-mailto link.
+-    this.showItem("context-copylink", this.onLink && !this.onMailtoLink);
+-    this.showItem("context-sep-copylink", this.onLink &&
+-                  (this.onImage || this.onVideo || this.onAudio));
++    this.showItem("context-copylink", false);
++    this.showItem("context-sep-copylink", false);
+ 
+ #ifdef CONTEXT_COPY_IMAGE_CONTENTS
+     // Copy image contents depends on whether we're on an image.
+     this.showItem("context-copyimage-contents", this.onImage);
+ #endif
+     // Copy image location depends on whether we're on an image.
+-    this.showItem("context-copyimage", this.onImage);
+-    this.showItem("context-copyvideourl", this.onVideo);
+-    this.showItem("context-copyaudiourl", this.onAudio);
++    this.showItem("context-copyimage", false);
++    this.showItem("context-copyvideourl", false);
++    this.showItem("context-copyaudiourl", false);
+     this.setItemAttr("context-copyvideourl",  "disabled", !this.mediaURL);
+     this.setItemAttr("context-copyaudiourl",  "disabled", !this.mediaURL);
+-    this.showItem("context-sep-copyimage", this.onImage ||
+-                  this.onVideo || this.onAudio);
++    this.showItem("context-sep-copyimage", false);
+   },
+ 
+   initMediaPlayerItems: function() {

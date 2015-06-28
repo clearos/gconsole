@@ -5,9 +5,6 @@
 # Use system nss/nspr?
 %define system_nss              1
 
-# Enable webm
-%define enable_webm             1
-
 # Gstreamer 1.0 support
 %define enable_gstreamer        1
 
@@ -22,14 +19,15 @@
 
 # Minimal required versions
 %if %{?system_nss}
-%global nspr_version 4.10.6
-%global nss_version 3.16.2.3
+%global nspr_version 4.10.8
+%global nss_version 3.18.0
 %endif
 
 %define cairo_version 1.10.2
 %define freetype_version 2.1.9
 %define ffi_version 3.0.9
 %global libvpx_version 1.3.0
+%define _default_patch_fuzz 2
 
 # Bookmark variables
 %define default_bookmarks_file  %{_datadir}/bookmarks/default-bookmarks.html
@@ -48,21 +46,21 @@
 %define build_langpacks         1
 
 %if %{official_branding}
-%define tarballdir  mozilla-esr31
+%define tarballdir  mozilla-esr38
 %define ext_version esr
 %endif
 
 
 Summary:        ClearOS web console
 Name:           gconsole
-Version:        31.3.0
-Release:        3%{?prever}%{?dist}
+Version:        38.0.1
+Release:        1%{?prever}%{?dist}
 License:        MPLv1.1 or GPLv2+ or LGPLv2+
 Group:          Applications/Internet
 # From ftp://ftp.mozilla.org/pub/firefox/releases/%{version}%{?pretag}/source
 Source0:        firefox-%{version}%{?prever}%{?ext_version}.source.tar.bz2
 %if %{build_langpacks}
-Source1:        firefox-langpacks-%{version}%{?ext_version}-20141126.tar.bz2
+Source1:        firefox-langpacks-%{version}%{?ext_version}-20150515.tar.bz2
 %endif
 Source10:       firefox-mozconfig
 Source11:       firefox-mozconfig-branded
@@ -77,20 +75,29 @@ Source100:      find-external-requires
 Patch0:         firefox-install-dir.patch
 Patch5:         xulrunner-24.0-jemalloc-ppc.patch
 Patch6:         webrtc-arch-cpu.patch
+Patch7:         build-no-format.patch
+Patch8:         firefox-ppc64le.patch
+Patch9:         firefox-debug.patch
+Patch10:        firefox-nss-3.18.0.patch
+Patch11:        build-nspr-prbool.patch
 
 # RPM specific patches
-Patch11:        firefox-default.patch
-Patch12:        firefox-enable-addons.patch
-Patch13:        rhbz-966424.patch
-Patch14:        remove-ogg.patch
-Patch15:        disable-webm.patch
-Patch16:        firefox-enable-plugins.patch
+Patch101:        firefox-default.patch
+Patch102:        firefox-enable-addons.patch
+Patch103:        rhbz-966424.patch
+Patch106:        firefox-enable-plugins.patch
+Patch108:        rhbz-1014858.patch
+# Fix Skia Neon stuff on AArch64
+Patch109:        aarch64-fix-skia.patch
+
 
 # Upstream patches
 Patch200:       firefox-duckduckgo.patch
+Patch201:       mozilla-1005535.patch
+Patch202:       mozilla-1152515.patch
 
 # ClearOS
-Patch1000:      gconsole-31-clearos.patch
+Patch1000:      gconsole-38-clearos.patch
 
 
 %if %{official_branding}
@@ -132,10 +139,8 @@ Requires:       sqlite >= %{sqlite_build_version}
 BuildRequires:  libffi-devel >= %{ffi_version}
 Requires:       libffi >= %{ffi_version}
 %endif
-%if %{?enable_webm}
 BuildRequires:  libvpx-devel >= %{libvpx_version}
 Requires:       libvpx >= %{libvpx_version}
-%endif
 %if %{?enable_gstreamer}
 BuildRequires:  gstreamer1-devel
 BuildRequires:  gstreamer1-plugins-base-devel
@@ -172,7 +177,6 @@ BuildRequires:  autoconf213
 Obsoletes:      gconsole < 24.1.0
 Conflicts:      gconsole < 24.1.0
 
-
 %define _use_internal_dependency_generator 0
 %define __find_requires %{SOURCE100}
 
@@ -185,24 +189,32 @@ ClearOS web console built from Mozilla Firefox.
 %setup -q -c
 cd %{tarballdir}
 
+# test if they exists
 # Build patches
 # We have to keep original patch backup extension to go thru configure without problems with tests
 %patch0 -p1 -b .orig
 %patch5 -p2 -b .jemalloc-ppc.patch
 %patch6 -p1 -b .webrtc-arch-cpu
+%patch7 -p1 -b .no-format
+%patch8 -p2 -b .ppc64le
+%if %{?debug_build}
+%patch9 -p1 -b .debug
+%endif
+%patch10 -p1 -b .nss-3.18.0
+%patch11 -p1 -b .nspr-prbool
 
 # RPM specific patches
-%patch11 -p1 -b .default
-%patch12 -p1 -b .addons
-%patch13 -p1 -b .rhbz-966424
-%patch14 -p1 -b .remove-ogg
-%if !%{?enable_webm}
-%patch15 -p1 -b .webm
-%endif
-%patch16 -p2 -b .plugins
+%patch101 -p1 -b .default
+%patch102 -p1 -b .addons
+%patch103 -p1 -b .rhbz-966424
+%patch106 -p2 -b .plugins
+%patch108 -p1 -b .rhbz-1014858
+%patch109 -p1 -b .aarch64
 
 # For branding specific patches.
 %patch200 -p1 -b .duckduckgo
+%patch201 -p1 -b .mozbz-1005535
+%patch202 -p1 -b .mozbz-1152515
 
 # Upstream patches
 
@@ -236,18 +248,7 @@ echo "ac_add_options --enable-system-sqlite" >> .mozconfig
 echo "ac_add_options --disable-system-sqlite" >> .mozconfig
 %endif
 
-%if %{?enable_webm}
 echo "ac_add_options --with-system-libvpx" >> .mozconfig
-echo "ac_add_options --enable-webm" >> .mozconfig
-echo "ac_add_options --enable-webrtc" >> .mozconfig
-echo "ac_add_options --enable-ogg" >> .mozconfig
-%else
-echo "ac_add_options --without-system-libvpx" >> .mozconfig
-echo "ac_add_options --disable-webm" >> .mozconfig
-echo "ac_add_options --disable-webrtc" >> .mozconfig
-echo "ac_add_options --disable-ogg" >> .mozconfig
-echo "ac_add_options --disable-opus" >> .mozconfig
-%endif
 
 %if %{?system_cairo}
 echo "ac_add_options --enable-system-cairo" >> .mozconfig
@@ -290,7 +291,6 @@ echo "ac_add_options --enable-jemalloc" >> .mozconfig
 %if %{?debug_build}
 echo "ac_add_options --enable-debug" >> .mozconfig
 echo "ac_add_options --disable-optimize" >> .mozconfig
-echo "ac_add_options --enable-dtrace" >> .mozconfig
 %else
 echo "ac_add_options --disable-debug" >> .mozconfig
 echo "ac_add_options --enable-optimize" >> .mozconfig
@@ -319,6 +319,10 @@ MOZ_OPT_FLAGS=$(echo "$RPM_OPT_FLAGS -fpermissive" | %{__sed} -e 's/-Wall//')
 %if %{?debug_build}
 MOZ_OPT_FLAGS=$(echo "$MOZ_OPT_FLAGS" | %{__sed} -e 's/-O2//')
 %endif
+# -Werror=format-security causes build failures when -Wno-format is explicitly given
+# for some sources
+MOZ_OPT_FLAGS="$MOZ_OPT_FLAGS -Wformat-security -Wformat -Werror=format-security"
+
 %ifarch s390
 MOZ_OPT_FLAGS=$(echo "$RPM_OPT_FLAGS" | %{__sed} -e 's/-g/-g1/')
 %endif
@@ -326,7 +330,7 @@ MOZ_OPT_FLAGS=$(echo "$RPM_OPT_FLAGS" | %{__sed} -e 's/-g/-g1/')
 MOZ_LINK_FLAGS="-Wl,--no-keep-memory -Wl,--reduce-memory-overheads"
 %endif
 
-export CFLAGS=$MOZ_OPT_FLAGS
+export CFLAGS=$(echo "$MOZ_OPT_FLAGS" | %{__sed} -e 's/-fpermissive//')
 export CXXFLAGS=$MOZ_OPT_FLAGS
 export LDFLAGS=$MOZ_LINK_FLAGS
 
@@ -350,15 +354,6 @@ make -f client.mk build STRIP="/bin/true" MOZ_MAKE_FLAGS="$MOZ_SMP_FLAGS"
 %install
 cd %{tarballdir}
 %{__rm} -rf $RPM_BUILD_ROOT
-
-# set up our prefs and add it to the package manifest file, so it gets pulled in
-# to omni.jar which gets created during make install
-%{__cp} %{SOURCE12} objdir/dist/bin/browser/defaults/preferences/all-redhat.js
-# This sed call "replaces" firefox.js with all-redhat.js, newline, and itself (&)
-# having the net effect of prepending all-redhat.js above firefox.js
-%{__sed} -i -e\
-    's|@BINPATH@/browser/@PREF_DIR@/firefox.js|@BINPATH@/browser/@PREF_DIR@/all-redhat.js\n&|' \
-    browser/installer/package-manifest.in
 
 # set up our default bookmarks
 # %{__cp} -p %{default_bookmarks_file} objdir/dist/bin/browser/defaults/profile/bookmarks.html
@@ -398,12 +393,41 @@ for langpack in `ls firefox-langpacks/*.xpi`; do
   echo "%%lang($language) %{langpackdir}/${extensionID}.xpi" >> ../%{name}.lang
 done
 %{__rm} -rf firefox-langpacks
+
+# Install langpack workaround (see #707100, #821169)
+function create_default_langpack() {
+language_long=$1
+language_short=$2
+cd $RPM_BUILD_ROOT%{langpackdir}
+ln -s langpack-$language_long@firefox.mozilla.org.xpi langpack-$language_short@firefox.mozilla.org.xpi
+cd -
+echo "%%lang($language_short) %{langpackdir}/langpack-$language_short@firefox.mozilla.org.xpi" >> ../%{name}.lang
+}
+
+# Table of fallbacks for each language
+# please file a bug at bugzilla.redhat.com if the assignment is incorrect
+create_default_langpack "bn-IN" "bn"
+create_default_langpack "es-AR" "es"
+create_default_langpack "fy-NL" "fy"
+create_default_langpack "ga-IE" "ga"
+create_default_langpack "gu-IN" "gu"
+create_default_langpack "hi-IN" "hi"
+create_default_langpack "hy-AM" "hy"
+create_default_langpack "nb-NO" "nb"
+create_default_langpack "nn-NO" "nn"
+create_default_langpack "pa-IN" "pa"
+create_default_langpack "pt-PT" "pt"
+create_default_langpack "sv-SE" "sv"
+create_default_langpack "zh-TW" "zh"
 %endif # build_langpacks
 
 # Keep compatibility with the old preference location.
 %{__mkdir_p} $RPM_BUILD_ROOT/%{mozappdir}/defaults/preferences
 %{__mkdir_p} $RPM_BUILD_ROOT/%{mozappdir}/browser/defaults
 ln -s %{mozappdir}/defaults/preferences $RPM_BUILD_ROOT/%{mozappdir}/browser/defaults/preferences
+
+# Install default ones
+%{__cp} %{SOURCE12} ${RPM_BUILD_ROOT}%{mozappdir}/defaults/preferences/all-redhat.js
 
 # System extensions
 %{__mkdir_p} $RPM_BUILD_ROOT%{_datadir}/mozilla/extensions/%{firefox_app_id}
@@ -455,7 +479,7 @@ fi
 %{mozappdir}/gconsole-bin
 %{mozappdir}/run-mozilla.sh
 %{mozappdir}/application.ini
-%dir %{mozappdir}/defaults/preferences
+%{mozappdir}/defaults/preferences/*
 %{mozappdir}/browser/defaults/preferences
 %exclude %{mozappdir}/removed-files
 %{mozappdir}/webapprt-stub
@@ -467,12 +491,12 @@ fi
 %{mozappdir}/components/*.manifest
 %{mozappdir}/dictionaries
 %{mozappdir}/*.so
-%{mozappdir}/mozilla-xremote-client
 %{mozappdir}/omni.ja
 %{mozappdir}/platform.ini
 %{mozappdir}/plugin-container
 %{mozappdir}/dependentlibs.list
 %exclude %{mozappdir}/defaults/pref/channel-prefs.js
+%{mozappdir}/gmp-clearkey
 %if !%{?system_nss}
 %{mozappdir}/*.chk
 %endif
@@ -485,10 +509,68 @@ fi
 #---------------------------------------------------------------------
 
 %changelog
-* Wed Dec 10 2014 ClearFoundation <developer@clearfoundation.com> - 31.3.0-3.clear
+* Sat Jun 27 2015 ClearFoundation <developer@clearfoundation.com> - 38.0.1-1.v7
 - Convert firefox to gconsole
 - Remove desktop shortcut and icons
 - Remove custom bookmarks
+
+* Tue Jun 23 2015 CentOS Sources <bugs@centos.org> - 38.0.1-1.el7.centos
+- CentOS default prefs
+
+* Fri May 15 2015 Martin Stransky <stransky@redhat.com> - 38.0-5
+- Update to 38.0.1 ESR
+
+* Thu May 14 2015 Martin Stransky <stransky@redhat.com> - 38.0-4
+- Fixed rhbz#1221286 - After update to Firefox 38 ESR
+  all RH preferences are gone
+
+* Thu May  7 2015 Martin Stransky <stransky@redhat.com> - 38.0-3
+- Enabled system nss
+- Removed unused patches
+
+* Mon May  4 2015 Jan Horak - 38.0-2
+- Update to 38.0 ESR
+
+* Mon Apr 27 2015 Martin Stransky <stransky@redhat.com> - 38.0b8-0.11
+- Update to 38.0 Beta 8
+
+* Wed Apr 22 2015 Martin Stransky <stransky@redhat.com> - 38.0b6-0.10
+- Added patch for mozbz#1152515
+
+* Tue Apr 21 2015 Martin Stransky <stransky@redhat.com> - 38.0b6-0.9
+- Update to 38.0 Beta 6
+
+* Mon Apr 20 2015 Martin Stransky <stransky@redhat.com> - 38.0b5-0.8
+- Update to 38.0 Beta 5
+
+* Fri Apr 10 2015 Martin Stransky <stransky@redhat.com> - 38.0b3-0.7
+- Update to 38.0 Beta 3
+
+* Fri Apr 10 2015 Martin Stransky <stransky@redhat.com> - 38.0b1-0.6
+- Added patch for mozbz#1152391
+
+* Thu Apr  9 2015 Marcin Juszkiewicz <mjuszkiewicz@redhat.com> - 38.0b1-0.5
+- Fix build on AArch64 (based on upstream skia changes)
+
+* Tue Apr 7 2015 Martin Stransky <stransky@redhat.com> - 38.0b1-0.4
+- Enabled debug build
+
+* Wed Apr  1 2015 Jan Horak <jhorak@redhat.com> - 38.0b1-1
+- Update to 38.0b1
+
+* Wed Feb 18 2015 Martin Stransky <stransky@redhat.com> - 31.5.0-2
+- Update to 31.5.0 ESR Build 2
+
+* Tue Jan  6 2015 Jan Horak <jhorak@redhat.com> - 31.4.0-1
+- Update to 31.4.0 ESR
+
+* Mon Jan 5 2015 Martin Stransky <stransky@redhat.com> - 31.3.0-6
+- Fixed Bug 1140385 - [HP HPS 7.1 bug] assertion
+  "sys_page_size == 0" when starting firefox
+
+* Fri Dec 19 2014 Martin Stransky <stransky@redhat.com> - 31.3.0-5
+- Fixed problems with dictionary (mozbz#1097550)
+- JS JIT fixes for ppc64le
 
 * Sat Nov 29 2014 Martin Stransky <stransky@redhat.com> - 31.3.0-3
 - Fixed geolocation key location

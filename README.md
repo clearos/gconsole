@@ -3,6 +3,7 @@
 Stripped down version of firefox used for local console webconfig access
 
 ## Update usage
+  Add __#kojibuild__ to commit message to automatically build
 
 * git clone git://github.com/clearos/gconsole.git
 * cd gconsole
@@ -13,5 +14,3 @@ Stripped down version of firefox used for local console webconfig access
 * git merge c7
 * __Fix conflicts!__
 * git commit
-
-  Add __#kojibuild__ to commit message to automatically build

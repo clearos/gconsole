@@ -53,14 +53,14 @@
 
 Summary:        ClearOS web console
 Name:           gconsole
-Version:        38.0.1
+Version:        38.1.0
 Release:        1%{?prever}%{?dist}
 License:        MPLv1.1 or GPLv2+ or LGPLv2+
 Group:          Applications/Internet
 # From ftp://ftp.mozilla.org/pub/firefox/releases/%{version}%{?pretag}/source
 Source0:        firefox-%{version}%{?prever}%{?ext_version}.source.tar.bz2
 %if %{build_langpacks}
-Source1:        firefox-langpacks-%{version}%{?ext_version}-20150515.tar.bz2
+Source1:        firefox-langpacks-%{version}%{?ext_version}-20150625.tar.bz2
 %endif
 Source10:       firefox-mozconfig
 Source11:       firefox-mozconfig-branded
@@ -78,7 +78,7 @@ Patch6:         webrtc-arch-cpu.patch
 Patch7:         build-no-format.patch
 Patch8:         firefox-ppc64le.patch
 Patch9:         firefox-debug.patch
-Patch10:        firefox-nss-3.18.0.patch
+Patch10:        firefox-nss-3.19.1.patch
 Patch11:        build-nspr-prbool.patch
 
 # RPM specific patches
@@ -200,7 +200,7 @@ cd %{tarballdir}
 %if %{?debug_build}
 %patch9 -p1 -b .debug
 %endif
-%patch10 -p1 -b .nss-3.18.0
+%patch10 -p1 -b .nss-3.19.1
 %patch11 -p1 -b .nspr-prbool
 
 # RPM specific patches
@@ -456,6 +456,23 @@ if [ $1 -eq 0 ]; then
   %{__rm} -rf %{mozappdir}/plugins
 fi
 
+%post
+update-desktop-database &> /dev/null || :
+touch --no-create %{_datadir}/icons/hicolor &>/dev/null || :
+if [ -x %{_bindir}/gtk-update-icon-cache ]; then
+  %{_bindir}/gtk-update-icon-cache --quiet %{_datadir}/icons/hicolor || :
+fi
+
+%postun
+if [ $1 -eq 0 ] ; then
+    touch --no-create %{_datadir}/icons/hicolor &>/dev/null
+    gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
+fi
+update-desktop-database &> /dev/null || :
+
+%posttrans
+gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
+
 %files -f %{name}.lang
 %defattr(-,root,root,-)
 %{_bindir}/gconsole
@@ -509,15 +526,21 @@ fi
 #---------------------------------------------------------------------
 
 %changelog
-* Sat Jun 27 2015 ClearFoundation <developer@clearfoundation.com> - 38.0.1-1.v7
+* Tue Jul  7 2015 ClearFoundation <developer@clearfoundation.com> - 38.1.0-1.v7
 - Convert firefox to gconsole
 - Remove desktop shortcut and icons
 - Remove custom bookmarks
 
-* Tue Jun 23 2015 CentOS Sources <bugs@centos.org> - 38.0.1-1.el7.centos
+* Thu Jul 02 2015 CentOS Sources <bugs@centos.org> - 38.1.0-1.el7.centos
 - CentOS default prefs
 
-* Fri May 15 2015 Martin Stransky <stransky@redhat.com> - 38.0-5
+* Thu Jun 25 2015 Jan Horak <jhorak@redhat.com> - 38.1.0-1
+- Update to 38.1.0 ESR
+
+* Thu May 21 2015 Jan Horak <jhorak@redhat.com> - 38.0.1-2
+- Fixed rhbz#1222807 by removing preun section
+
+* Fri May 15 2015 Martin Stransky <stransky@redhat.com> - 38.0.1-1
 - Update to 38.0.1 ESR
 
 * Thu May 14 2015 Martin Stransky <stransky@redhat.com> - 38.0-4

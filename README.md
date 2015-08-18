@@ -2,9 +2,6 @@
 
 Stripped down version of firefox used for local console webconfig access
 
-## Update usage
-  Add __#kojibuild__ to commit message to automatically build
-
 * git clone git+ssh://git@github.com/clearos/gconsole.git
 * cd gconsole
 * git checkout c7

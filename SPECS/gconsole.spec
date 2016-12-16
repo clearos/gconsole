@@ -1,153 +1,170 @@
-# Use system sqlite?
-%define system_sqlite           0
-%define system_ffi              1
-
-# Use system nss/nspr?
 %define system_nss              1
-
-# Gstreamer 1.0 support
+%global nspr_version            4.11.0
+%global nss_version             3.21.0
+%define system_sqlite           0
+%define sqlite_version          3.8.4.2
+%define system_ffi              1
+%define ffi_version             3.0.9
+%define use_bundled_yasm        1
+%define use_bundled_python      0
+%define python_version          2.7.8
+%define use_bundled_gcc         0
+%define gcc_version             4.8.2-16
 %define enable_gstreamer        1
-
-# Use system cairo?
 %define system_cairo            0
-
-# Build as a debug package?
-%define debug_build             0
-
-# Do we build a final version?
+%define cairo_version           1.10.2
+%define freetype_version        2.1.9
+%define system_jpeg             1
+%define system_gio              1
+%define system_hunspell         1
+%define system_libatomic        0
+%define use_baselinejit         1
 %define official_branding       1
 
-# Minimal required versions
-%if %{?system_nss}
-%global nspr_version 4.10.8
-%global nss_version 3.18.0
+%define debug_build             0
+# This is for local builds or builds in mock with --no-clean
+# It skips building of gcc, binutils and yasm rpms when they exists, it just installs
+# them and doesn't delete them to allow recycling them in next build.
+# SHOULD ALWAYS BE 0 WHEN BUILDING IN BREW
+%define do_not_clean_rpms       0
+
+# Configure and override build options for various platforms and RHEL versions
+# ============================================================================
+
+# RHEL7
+%if 0%{?rhel} == 7
+%ifarch s390x
+%define use_bundled_gcc         1
+%endif
 %endif
 
-%define cairo_version 1.10.2
-%define freetype_version 2.1.9
-%define ffi_version 3.0.9
-%global libvpx_version 1.3.0
+# RHEL6
+%if 0%{?rhel} == 6
+%define use_bundled_python      1
+%define use_bundled_gcc         1
+%define use_bundled_yasm        1
+%define system_ffi              0
+%define enable_gstreamer        0
+%define use_bundled_binutils    1
+%endif
+
+# RHEL5
+%if 0%{?rhel} == 5
+%define use_bundled_python      1
+%define use_bundled_gcc         1
+%define use_bundled_yasm        1
+%define system_ffi              0
+%define enable_gstreamer        0
+%define use_bundled_binutils    1
+%define system_jpeg             0
+%define system_gio              0
+%define system_hunspell         0
+# ppc and ia64 no longer supported (rhbz#1214863, rhbz#1214865)
+ExcludeArch: ppc ia64
+%define system_libatomic        1
+%endif
+
+# Require libatomic for ppc
+%ifarch ppc
+%define system_libatomic        1
+%endif
+
+# ============================================================================
+
+# Avoid patch failures
 %define _default_patch_fuzz 2
 
-# Bookmark variables
+
 %define default_bookmarks_file  %{_datadir}/bookmarks/default-bookmarks.html
 %define firefox_app_id          \{ec8030f7-c20a-464f-9b0e-13a3a9e97384\}
-
 %define mozappdir               %{_libdir}/%{name}
+%define build_langpacks         1
 %define langpackdir             %{mozappdir}/langpacks
-
 %if %{?system_sqlite}
-%define sqlite_version 3.8.4.2
 # The actual sqlite version (see #480989):
 %global sqlite_build_version %(pkg-config --silence-errors --modversion sqlite3 2>/dev/null || echo 65536)
 %endif
 
-%define official_branding       1
-%define build_langpacks         1
-
-%if %{official_branding}
-%define tarballdir  mozilla-esr38
-%define ext_version esr
-%endif
-
-
 Summary:        ClearOS web console
 Name:           gconsole
-Version:        38.1.0
-Release:        1%{?prever}%{?dist}
+Version:        45.6.0
+Release:        1%{?dist}
+URL:            http://www.mozilla.org/projects/firefox/
 License:        MPLv1.1 or GPLv2+ or LGPLv2+
 Group:          Applications/Internet
-# From ftp://ftp.mozilla.org/pub/firefox/releases/%{version}%{?pretag}/source
-Source0:        firefox-%{version}%{?prever}%{?ext_version}.source.tar.bz2
+
+%define         ext_version             esr
+%define         tarballdir              firefox-%{version}%{?ext_version}
+
+# From ftp://archive.mozilla.org/pub/firefox/releases/%{version}%{?ext_version}/source
+Source0:        firefox-%{version}%{?ext_version}.source.tar.xz
 %if %{build_langpacks}
-Source1:        firefox-langpacks-%{version}%{?ext_version}-20150625.tar.bz2
+Source1:        firefox-langpacks-%{version}%{?ext_version}-20161211.tar.xz
 %endif
 Source10:       firefox-mozconfig
-Source11:       firefox-mozconfig-branded
 Source12:       firefox-clearos-default-prefs.js
 Source20:       firefox.desktop
-Source21:       firefox.sh.in
+Source500:      firefox.sh.in.rhel5
+Source600:      firefox.sh.in.rhel6
+Source700:      firefox.sh.in.rhel7
 Source23:       firefox.1
 Source24:       mozilla-api-key
 Source100:      find-external-requires
+Source200:      https://www.python.org/ftp/python/2.7.8/Python-2.7.8.tgz
+Source300:      gcc48-%{gcc_version}.el5.src.rpm
+Source301:      yasm-1.2.0-3.el5.src.rpm
+Source302:      devtoolset-2-binutils-2.23.52.0.1-10.el5.src.rpm
+# RHEL5 bookmarks
+Source501:       firefox-centos-default-bookmarks.html
 
 # Build patches
 Patch0:         firefox-install-dir.patch
 Patch5:         xulrunner-24.0-jemalloc-ppc.patch
 Patch6:         webrtc-arch-cpu.patch
-Patch7:         build-no-format.patch
 Patch8:         firefox-ppc64le.patch
-Patch9:         firefox-debug.patch
-Patch10:        firefox-nss-3.19.1.patch
-Patch11:        build-nspr-prbool.patch
+Patch16:        mozilla-1253216-disable-ion.patch
+Patch17:        build-nss.patch
 
-# RPM specific patches
-Patch101:        firefox-default.patch
-Patch102:        firefox-enable-addons.patch
-Patch103:        rhbz-966424.patch
-Patch106:        firefox-enable-plugins.patch
-Patch108:        rhbz-1014858.patch
-# Fix Skia Neon stuff on AArch64
-Patch109:        aarch64-fix-skia.patch
-
+# RHEL patches
+Patch101:       firefox-default.patch
+Patch102:       firefox-enable-addons.patch
+Patch103:       rhbz-966424.patch
+Patch106:       firefox-enable-plugins.patch
+Patch109:       aarch64-fix-skia.patch
+Patch110:       mozilla-1170092-etc-conf.patch
+Patch111:       rhbz-1173156.patch
+Patch112:       mozilla-256180.patch
 
 # Upstream patches
-Patch200:       firefox-duckduckgo.patch
 Patch201:       mozilla-1005535.patch
+# Kaie's patch, we'll most likely need this one
 Patch202:       mozilla-1152515.patch
+Patch203:       mozilla-1270046.patch
+# Laszlo Ersek patch for avoid obscure crashing on aarch64
 
-# ClearOS
-Patch1000:      gconsole-38-clearos.patch
+# RHEL7 patches
+Patch300:       mozilla-975832.patch
 
-
-%if %{official_branding}
-# Required by Mozilla Corporation
-
-%else
-# Not yet approved by Mozillla Corporation
-
-
-%endif
+# RHEL5 patches
+Patch500:       build-el5-build-id.patch
+Patch501:       build-el5-sandbox.patch
+Patch502:       build-el5-gtk2-2.10.patch
+Patch503:       build-el5-xlib-header.patch
+Patch504:       build-el5-rt-tgsigqueueinfo.patch
+Patch505:       build-el5-rapl.patch
+Patch506:       build-el5-fontconfig.patch
+Patch507:       build-el5-stdint.patch
+Patch508:       build-el5-nss.patch
+Patch509:       rhbz-1150082.patch
 
 # ---------------------------------------------------
 BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
+
+# ClearOS
+Patch1000:      gconsole-45-clearos.patch
+
 # BuildRequires:  desktop-file-utils
-
 BuildRequires:  mesa-libGL-devel
-# BuildRequires:  system-bookmarks
-# Requires:       system-bookmarks
-# Requires:       redhat-indexhtml
-%if %{?system_sqlite}
-BuildRequires:  sqlite-devel >= %{sqlite_version}
-Requires:       sqlite >= %{sqlite_build_version}
-%endif
-
-%if %{?system_nss}
-BuildRequires:  nspr-devel >= %{nspr_version}
-BuildRequires:  nss-devel >= %{nss_version}
-Requires:       nspr >= %{nspr_version}
-Requires:       nss >= %{nss_version}
-%endif
-%if %{?system_cairo}
-BuildRequires:  cairo-devel >= %{cairo_version}
-%endif
-%if %{?system_sqlite}
-BuildRequires:  sqlite-devel >= %{sqlite_version}
-Requires:       sqlite >= %{sqlite_build_version}
-%endif
-%if %{?system_ffi}
-BuildRequires:  libffi-devel >= %{ffi_version}
-Requires:       libffi >= %{ffi_version}
-%endif
-BuildRequires:  libvpx-devel >= %{libvpx_version}
-Requires:       libvpx >= %{libvpx_version}
-%if %{?enable_gstreamer}
-BuildRequires:  gstreamer1-devel
-BuildRequires:  gstreamer1-plugins-base-devel
-%endif
-BuildRequires:  hunspell-devel
-BuildRequires:  libpng-devel
-BuildRequires:  libjpeg-devel
 BuildRequires:  zip
 BuildRequires:  bzip2-devel
 BuildRequires:  zlib-devel
@@ -166,17 +183,202 @@ BuildRequires:  alsa-lib-devel
 BuildRequires:  libnotify-devel
 BuildRequires:  autoconf213
 BuildRequires:  mesa-libGL-devel
-BuildRequires:  pulseaudio-libs-devel
+BuildRequires:  autoconf213
+BuildRequires:  xz
+%if ! %{use_bundled_yasm}0
+BuildRequires:  yasm
+%endif
+%if %{?system_sqlite}
+BuildRequires:  sqlite-devel >= %{sqlite_version}
+Requires:       sqlite >= %{sqlite_build_version}
+%endif
+%if %{?system_nss}
+BuildRequires:  nspr-devel >= %{nspr_version}
+BuildRequires:  nss-devel >= %{nss_version}
+Requires:       nspr >= %{nspr_version}
+Requires:       nss >= %{nss_version}
+%endif
+%if %{?system_cairo}
+BuildRequires:  cairo-devel >= %{cairo_version}
+%endif
+%if %{?system_sqlite}
+BuildRequires:  sqlite-devel >= %{sqlite_version}
+Requires:       sqlite >= %{sqlite_build_version}
+%endif
+%if %{?system_ffi}
+BuildRequires:  libffi-devel >= %{ffi_version}
+Requires:       libffi >= %{ffi_version}
+%endif
+%if %{?enable_gstreamer}
+BuildRequires:  gstreamer1-devel
+BuildRequires:  gstreamer1-plugins-base-devel
+%endif
+BuildRequires:  libpng-devel
+%if %{?system_jpeg}
+BuildRequires:  libjpeg-devel
+%endif
+%if %{?system_hunspell}
+BuildRequires:  hunspell-devel
+%endif
+%if %{system_libatomic}
+BuildRequires:  libatomic
+Requires:       libatomic
+%endif
 
+# RHEL7 requires
+%if 0%{?rhel} == 7
+#Requires:       redhat-indexhtml
+BuildRequires:  pulseaudio-libs-devel
+#BuildRequires:  system-bookmarks
 Requires:       mozilla-filesystem
 Requires:       liberation-fonts-common
 Requires:       liberation-sans-fonts
+%endif
 
-BuildRequires:  autoconf213
+# RHEL6 requires
+%if 0%{?rhel} == 6
+BuildRequires:  desktop-file-utils
+BuildRequires:  system-bookmarks
+Requires:       system-bookmarks
+Requires:       redhat-indexhtml
+Requires:       mozilla-filesystem
+Requires:       gtk2 >= 2.24
+BuildRequires:  pulseaudio-libs-devel
+BuildRequires:  system-bookmarks
+Requires:       mozilla-filesystem
+Requires:       liberation-fonts-common
+Requires:       liberation-sans-fonts
+%endif
+
+# RHEL5 requires
+%if 0%{rhel} == 5
+BuildRequires:  libXcomposite-devel
+BuildRequires:  libXdamage-devel
+BuildRequires:  xorg-x11-proto-devel
+%endif
+
 # Obsoletes:      mozilla <= 37:1.7.13
-Obsoletes:      gconsole < 24.1.0
-Conflicts:      gconsole < 24.1.0
+Obsoletes:      gconsole < 38.0
+Conflicts:      gconsole < 38.0
 
+%if %{use_bundled_python}
+BuildRequires:  openssl-devel
+%endif
+# GCC 4.8 BuildRequires
+# ==================================================================================
+%if %{use_bundled_gcc}
+
+%ifarch s390x
+%global multilib_32_arch s390
+%endif
+%ifarch sparc64
+%global multilib_32_arch sparcv9
+%endif
+%ifarch ppc64
+%global multilib_32_arch ppc
+%endif
+%ifarch x86_64
+%if 0%{?rhel} >= 6
+%global multilib_32_arch i686
+%else
+%global multilib_32_arch i386
+%endif
+%endif
+
+%global multilib_64_archs sparc64 ppc64 s390x x86_64
+
+%if 0%{?rhel} >= 6
+# Need binutils which support --build-id >= 2.17.50.0.17-3
+# Need binutils which support %gnu_unique_object >= 2.19.51.0.14
+# Need binutils which support .cfi_sections >= 2.19.51.0.14-33
+BuildRequires: binutils >= 2.19.51.0.14-33
+# While gcc doesn't include statically linked binaries, during testing
+# -static is used several times.
+BuildRequires: glibc-static
+%else
+# Don't have binutils which support --build-id >= 2.17.50.0.17-3
+# Don't have binutils which support %gnu_unique_object >= 2.19.51.0.14
+# Don't have binutils which  support .cfi_sections >= 2.19.51.0.14-33
+BuildRequires: binutils >= 2.17.50.0.2-8
+%endif
+BuildRequires: zlib-devel, gettext, dejagnu, bison, flex, texinfo, sharutils
+BuildRequires: /usr/bin/pod2man
+%if 0%{?rhel} >= 7
+BuildRequires: texinfo-tex
+%endif
+#BuildRequires: systemtap-sdt-devel >= 1.3
+# For VTA guality testing
+BuildRequires: gdb
+# Make sure pthread.h doesn't contain __thread tokens
+# Make sure glibc supports stack protector
+# Make sure glibc supports DT_GNU_HASH
+BuildRequires: glibc-devel >= 2.4.90-13
+%if 0%{?rhel} >= 6
+BuildRequires: elfutils-devel >= 0.147
+BuildRequires: elfutils-libelf-devel >= 0.147
+%else
+BuildRequires: elfutils-devel >= 0.72
+%endif
+%ifarch ppc ppc64 s390 s390x sparc sparcv9 alpha
+# Make sure glibc supports TFmode long double
+BuildRequires: glibc >= 2.3.90-35
+%endif
+%ifarch %{multilib_64_archs} sparcv9 ppc
+# Ensure glibc{,-devel} is installed for both multilib arches
+BuildRequires: /lib/libc.so.6 /usr/lib/libc.so /lib64/libc.so.6 /usr/lib64/libc.so
+%endif
+%ifarch ia64
+BuildRequires: libunwind >= 0.98
+%endif
+# Need .eh_frame ld optimizations
+# Need proper visibility support
+# Need -pie support
+# Need --as-needed/--no-as-needed support
+# On ppc64, need omit dot symbols support and --non-overlapping-opd
+# Need binutils that owns /usr/bin/c++filt
+# Need binutils that support .weakref
+# Need binutils that supports --hash-style=gnu
+# Need binutils that support mffgpr/mftgpr
+#%if 0%{?rhel} >= 6
+## Need binutils which support --build-id >= 2.17.50.0.17-3
+## Need binutils which support %gnu_unique_object >= 2.19.51.0.14
+## Need binutils which support .cfi_sections >= 2.19.51.0.14-33
+#Requires: binutils >= 2.19.51.0.14-33
+#%else
+## Don't have binutils which support --build-id >= 2.17.50.0.17-3
+## Don't have binutils which support %gnu_unique_object >= 2.19.51.0.14
+## Don't have binutils which  support .cfi_sections >= 2.19.51.0.14-33
+#Requires: binutils >= 2.17.50.0.2-8
+#%endif
+## Make sure gdb will understand DW_FORM_strp
+#Conflicts: gdb < 5.1-2
+#Requires: glibc-devel >= 2.2.90-12
+#%ifarch ppc ppc64 s390 s390x sparc sparcv9 alpha
+## Make sure glibc supports TFmode long double
+#Requires: glibc >= 2.3.90-35
+#%endif
+#Requires: libgcc >= 4.1.2-43
+#Requires: libgomp >= 4.4.4-13
+#%if 0%{?rhel} == 6
+#Requires: libstdc++ >= 4.4.4-13
+#%else
+#Requires: libstdc++ = 4.1.2
+#%endif
+##FIXME gcc version
+#Requires: libstdc++-devel = %{version}-%{release}
+BuildRequires: gmp-devel >= 4.1.2-8
+%if 0%{?rhel} >= 6
+BuildRequires: mpfr-devel >= 2.2.1
+%endif
+%if 0%{?rhel} >= 7
+BuildRequires: libmpc-devel >= 0.8.1
+%endif
+
+%endif # bundled gcc BuildRequires
+# ==================================================================================
+# Override internal dependency generator to avoid showing libraries provided by this package
+# in dependencies:
+AutoProv: 0
 %define _use_internal_dependency_generator 0
 %define __find_requires %{SOURCE100}
 
@@ -189,52 +391,65 @@ ClearOS web console built from Mozilla Firefox.
 %setup -q -c
 cd %{tarballdir}
 
-# test if they exists
 # Build patches
 # We have to keep original patch backup extension to go thru configure without problems with tests
 %patch0 -p1 -b .orig
 %patch5 -p2 -b .jemalloc-ppc.patch
 %patch6 -p1 -b .webrtc-arch-cpu
-%patch7 -p1 -b .no-format
 %patch8 -p2 -b .ppc64le
-%if %{?debug_build}
-%patch9 -p1 -b .debug
-%endif
-%patch10 -p1 -b .nss-3.19.1
-%patch11 -p1 -b .nspr-prbool
+%patch16 -p2 -b .moz-1253216-disable-ion
+%patch17 -p1 -b .build-nss
 
 # RPM specific patches
 %patch101 -p1 -b .default
 %patch102 -p1 -b .addons
 %patch103 -p1 -b .rhbz-966424
 %patch106 -p2 -b .plugins
-%patch108 -p1 -b .rhbz-1014858
 %patch109 -p1 -b .aarch64
-
-# For branding specific patches.
-%patch200 -p1 -b .duckduckgo
-%patch201 -p1 -b .mozbz-1005535
-%patch202 -p1 -b .mozbz-1152515
+%patch110 -p1 -b .moz-1170092-etc-conf
+%patch111 -p2 -b .rhbz-1173156
+%patch112 -p1 -b .mozbz-256180
 
 # Upstream patches
+%patch201 -p1 -b .mozbz-1005535
+# FIXME: will require this?: by kai
+%patch202 -p1 -b .mozbz-1152515
+%patch203 -p1 -b .mozbz-1270046
 
-%if %{official_branding}
-# Required by Mozilla Corporation
+# RHEL7 only patches
+%if %{?rhel} == 7
+%patch300 -p1 -b .mozbz-975832
+%endif
 
-%else
-# Not yet approved by Mozilla Corporation
-
+# RHEL5 only patches
+%if %{?rhel} == 5
+%patch500 -p1 -b .gnu-build-id
+%patch501 -p1 -b .build-sandbox
+%patch502 -p1 -b .build-gtk2
+%patch503 -p1 -b .build-xlib-swap
+%patch504 -p1 -b .build-rt-tgsigqueueinfo
+%patch505 -p1 -b .build-el5-rapl
+%patch506 -p1 -b .build-el5-fontconfig
+%patch507 -p1 -b .build-el5-stdint
+%patch508 -p1 -b .build-el5-nss
+%patch509 -p1 -b .rhbz-1150082
 %endif
 
 %patch1000 -p1 -b .clearos
 
-
 %{__rm} -f .mozconfig
 %{__cp} %{SOURCE10} .mozconfig
-%if %{official_branding}
-%{__cat} %{SOURCE11} >> .mozconfig
-%endif
 %{__cp} %{SOURCE24} mozilla-api-key
+
+function add_to_mozconfig() {
+  mozconfig_entry=$1
+  echo "ac_add_options --$1" >> .mozconfig
+}
+
+# Modify mozconfig file
+%if %{official_branding}
+ add_to_mozconfig "enable-official-branding"
+%endif
 
 # Change binary name (ClearOS)
 cat << __EOF__ >> .mozconfig
@@ -243,110 +458,264 @@ ac_add_options --with-user-appdir=.gconsole
 __EOF__
 
 %if %{?system_sqlite}
-echo "ac_add_options --enable-system-sqlite" >> .mozconfig
+ add_to_mozconfig "enable-system-sqlite"
 %else
-echo "ac_add_options --disable-system-sqlite" >> .mozconfig
+ add_to_mozconfig "disable-system-sqlite"
 %endif
 
-echo "ac_add_options --with-system-libvpx" >> .mozconfig
-
 %if %{?system_cairo}
-echo "ac_add_options --enable-system-cairo" >> .mozconfig
+ add_to_mozconfig "enable-system-cairo"
 %else
-echo "ac_add_options --disable-system-cairo" >> .mozconfig
+ add_to_mozconfig "disable-system-cairo"
 %endif
 
 %if %{?system_ffi}
-echo "ac_add_options --enable-system-ffi" >> .mozconfig
+ add_to_mozconfig "enable-system-ffi"
 %endif
 
 %if %{?system_nss}
-echo "ac_add_options --with-system-nspr" >> .mozconfig
-echo "ac_add_options --with-system-nss" >> .mozconfig
+ add_to_mozconfig "with-system-nspr"
+ add_to_mozconfig "with-system-nss"
 %else
-echo "ac_add_options --without-system-nspr" >> .mozconfig
-echo "ac_add_options --without-system-nss" >> .mozconfig
+ add_to_mozconfig "without-system-nspr"
+ add_to_mozconfig "without-system-nss"
 %endif
 
 %if %{?enable_gstreamer}
-echo "ac_add_options --enable-gstreamer=1.0" >> .mozconfig
+ add_to_mozconfig "enable-gstreamer=1.0"
 %else
-echo "ac_add_options --disable-gstreamer" >> .mozconfig
+ add_to_mozconfig "disable-gstreamer"
 %endif
 
-%ifnarch %{ix86} x86_64
-echo "ac_add_options --disable-methodjit" >> .mozconfig
-echo "ac_add_options --disable-monoic" >> .mozconfig
-echo "ac_add_options --disable-polyic" >> .mozconfig
-echo "ac_add_options --disable-tracejit" >> .mozconfig
+%if %{?system_jpeg}
+ add_to_mozconfig "with-system-jpeg"
+%else
+ add_to_mozconfig "without-system-jpeg"
+%endif
+%if %{?system_hunspell}
+ add_to_mozconfig "enable-system-hunspell"
 %endif
 
 # RHEL 7 mozconfig changes:
-echo "ac_add_options --enable-system-hunspell" >> .mozconfig
-echo "ac_add_options --enable-libnotify" >> .mozconfig
-echo "ac_add_options --enable-startup-notification" >> .mozconfig
-echo "ac_add_options --enable-jemalloc" >> .mozconfig
+%if 0%{rhel} >= 6
+ add_to_mozconfig "enable-libnotify"
+ add_to_mozconfig "enable-startup-notification"
+ add_to_mozconfig "enable-jemalloc"
+%endif
+
+# RHEL 6
+%if 0%{rhel} == 6
+ # Disable dbus, because we're unable to build with its support in brew
+ add_to_mozconfig "disable-dbus"
+%endif
+
+%if 0%{rhel} == 5
+ add_to_mozconfig "disable-pulseaudio"
+%endif
+
+%ifarch aarch64
+ add_to_mozconfig "disable-ion"
+%endif
+
+%if %{system_gio}
+ add_to_mozconfig "enable-gio"
+ #add_to_mozconfig "disable-gnomevfs"
+%else
+ # TODO: gnomevfs for RHEL5!
+ add_to_mozconfig "disable-gio"
+ #add_to_mozconfig "enable-gnomevfs"
+%endif
 
 # Debug build flags
 %if %{?debug_build}
-echo "ac_add_options --enable-debug" >> .mozconfig
-echo "ac_add_options --disable-optimize" >> .mozconfig
+ add_to_mozconfig "enable-debug"
+ add_to_mozconfig "disable-optimize"
 %else
-echo "ac_add_options --disable-debug" >> .mozconfig
-echo "ac_add_options --enable-optimize" >> .mozconfig
-echo "ac_add_options --enable-release" >> .mozconfig
+ add_to_mozconfig "disable-debug"
+ add_to_mozconfig "enable-optimize"
+ add_to_mozconfig "enable-release"
+%endif
+
+#Disabled due to rhbz#1330898
+add_to_mozconfig "disable-ffmpeg"
+
+#FIXME RTTI?? RHEL5/6
+# ac_add_options --enable-cpp-rtti
+# RHEL7: ac_add_options --with-system-bz2
+# RHEL5: never been there, but is it usable --enable-gnomeui ????
+
+%if %{use_bundled_python}
+ # Prepare Python 2.7 sources
+ tar xf %{SOURCE200}
 %endif
 
 #---------------------------------------------------------------------
 
 %build
-%if %{?system_sqlite}
-# Do not proceed with build if the sqlite require would be broken:
-# make sure the minimum requirement is non-empty, ...
-sqlite_version=$(expr "%{sqlite_version}" : '\([0-9]*\.\)[0-9]*\.') || exit 1
-# ... and that major number of the computed build-time version matches:
-case "%{sqlite_build_version}" in
-  "$sqlite_version"*) ;;
-  *) exit 1 ;;
-esac
+
+function build_bundled_package() {
+  PACKAGE_RPM=$1
+  PACKAGE_FILES=$2
+  PACKAGE_SOURCE=$3
+  PACKAGE_DIR="%{_topdir}/RPMS"
+
+  PACKAGE_ALREADY_BUILD=0
+  %if %{do_not_clean_rpms}
+    if ls $PACKAGE_DIR/$PACKAGE_RPM; then
+      PACKAGE_ALREADY_BUILD=1
+    fi
+    if ls $PACKAGE_DIR/%{_arch}/$PACKAGE_RPM; then
+      PACKAGE_ALREADY_BUILD=1
+    fi
+  %endif
+  if [ $PACKAGE_ALREADY_BUILD == 0 ]; then
+    echo "Rebuilding $PACKAGE_RPM from $PACKAGE_SOURCE"; echo "==============================="
+    rpmbuild --nodeps --rebuild $PACKAGE_SOURCE
+  fi
+
+  if [ ! -f $PACKAGE_DIR/$PACKAGE_RPM ]; then
+    # Hack for tps tests
+    ARCH_STR=%{_arch}
+    %ifarch i386 i686
+    ARCH_STR="i?86"
+    %endif
+    PACKAGE_DIR="$PACKAGE_DIR/$ARCH_STR"
+  fi
+  pushd $PACKAGE_DIR
+  echo "Installing $PACKAGE_DIR/$PACKAGE_RPM"; echo "==============================="
+  rpm2cpio $PACKAGE_DIR/$PACKAGE_RPM | cpio -iduv
+  # Clean rpms to avoid including them to package
+  %if ! %{do_not_clean_rpms}0
+    rm -f $PACKAGE_FILES
+  %endif
+
+  PATH=$PACKAGE_DIR/usr/bin:$PATH
+  export PATH
+  LD_LIBRARY_PATH=$PACKAGE_DIR/usr/%{_lib}
+  export LD_LIBRARY_PATH
+  popd
+}
+
+# Build and install local yasm if needed
+# ======================================
+%if %{use_bundled_yasm}
+  build_bundled_package 'yasm-1*.rpm' 'yasm-*.rpm' '%{SOURCE301}'
 %endif
 
+# Install local binutils if needed
+# ======================================
+%if 0%{?use_bundled_binutils}
+  build_bundled_package 'binutils-2*.rpm' 'binutils*.rpm' '%{SOURCE302}'
+%endif
+
+# Install local GCC if needed
+# ======================================
+%if %{use_bundled_gcc}
+  %if %{rhel} == 5
+    %ifarch ppc64
+      export STRIP="/bin/true"
+    %endif
+  %endif
+  build_bundled_package 'gcc48-%{gcc_version}*.rpm' 'gcc48-*.rpm' '%{SOURCE300}'
+  %if %{rhel} == 5
+    %ifarch ppc64
+      unset STRIP
+    %endif
+  %endif
+  export CXX=g++
+%endif
+
+
+# Install local Python if needed
+# ======================================
+%if %{use_bundled_python}
+    echo "Rebuilding Python"; echo "==============================="
+  pushd %{tarballdir}
+
+  # Build Python 2.7 and set environment
+  BUILD_DIR=`pwd`/python_build
+  cd Python-%{python_version}
+  ./configure --prefix=$BUILD_DIR --exec-prefix=$BUILD_DIR
+  make
+  make install
+  cd -
+
+  PATH=$BUILD_DIR/bin:$PATH
+  export PATH
+  popd
+%endif # bundled Python
+
+%if %{?system_sqlite}
+  # Do not proceed with build if the sqlite require would be broken:
+  # make sure the minimum requirement is non-empty, ...
+  sqlite_version=$(expr "%{sqlite_version}" : '\([0-9]*\.\)[0-9]*\.') || exit 1
+  # ... and that major number of the computed build-time version matches:
+  case "%{sqlite_build_version}" in
+    "$sqlite_version"*) ;;
+    *) exit 1 ;;
+  esac
+%endif
+
+echo "Building Firefox"; echo "==============================="
 cd %{tarballdir}
 
-# Mozilla builds with -Wall with exception of a few warnings which show up
-# everywhere in the code; so, don't override that.
-MOZ_OPT_FLAGS=$(echo "$RPM_OPT_FLAGS -fpermissive" | %{__sed} -e 's/-Wall//')
-%if %{?debug_build}
-MOZ_OPT_FLAGS=$(echo "$MOZ_OPT_FLAGS" | %{__sed} -e 's/-O2//')
-%endif
-# -Werror=format-security causes build failures when -Wno-format is explicitly given
-# for some sources
-MOZ_OPT_FLAGS="$MOZ_OPT_FLAGS -Wformat-security -Wformat -Werror=format-security"
+# 1. Mozilla builds with -Wall with exception of a few warnings which show up
+#    everywhere in the code; so, don't override that.
+# 2. -Werror=format-security causes build failures when -Wno-format is explicitly given
+#    for some sources
+MOZ_OPT_FLAGS=$(echo "$RPM_OPT_FLAGS -fpermissive -Wformat-security -Wformat -Werror=format-security" | %{__sed} -e 's/-Wall//')
 
+# TODO check if necessery
 %ifarch s390
-MOZ_OPT_FLAGS=$(echo "$RPM_OPT_FLAGS" | %{__sed} -e 's/-g/-g1/')
+MOZ_OPT_FLAGS=$(echo "$MOZ_OPT_FLAGS" | %{__sed} -e 's/-g/-g1/')
 %endif
+
+# Avoid failing builds because OOM killer on some arches
 %ifarch s390 %{arm} ppc
-MOZ_LINK_FLAGS="-Wl,--no-keep-memory -Wl,--reduce-memory-overheads"
+MOZ_LINK_FLAGS="$MOZ_LINK_FLAGS -Wl,--no-keep-memory -Wl,--reduce-memory-overheads"
+%endif
+
+%if %{rhel} == 6
+  %if %{system_libatomic}
+    MOZ_LINK_FLAGS="$MOZ_LINK_FLAGS -l:libatomic.so.1"
+  %endif
+%endif
+
+%if %{rhel} == 5
+  %if %{system_libatomic}
+    # Force to use ld.bfd linker instead of ld.gold
+    MOZ_LINK_FLAGS="$MOZ_LINK_FLAGS -fuse-ld=bfd -l:libatomic.so.1"
+  %endif
+  %ifarch i386 i686
+    MOZ_OPT_FLAGS=$(echo "$MOZ_OPT_FLAGS" | %{__sed} -e 's/-march=i386/-march=i586/')
+  %endif
+%endif
+
+%if %{?debug_build}
+  MOZ_OPT_FLAGS=$(echo "$MOZ_OPT_FLAGS" | %{__sed} -e 's/-O2//')
 %endif
 
 export CFLAGS=$(echo "$MOZ_OPT_FLAGS" | %{__sed} -e 's/-fpermissive//')
 export CXXFLAGS=$MOZ_OPT_FLAGS
-export LDFLAGS=$MOZ_LINK_FLAGS
+export LDFLAGS="-Wl,--verbose $MOZ_LINK_FLAGS"
 
 export PREFIX='%{_prefix}'
 export LIBDIR='%{_libdir}'
 
+# Hack for missing shell when building in brew on RHEL6 and RHEL5
+%if 0%{?rhel} <= 6
+export SHELL=/bin/sh
+%endif
+
 MOZ_SMP_FLAGS=-j1
-%ifnarch ppc ppc64 s390 s390x
 [ -z "$RPM_BUILD_NCPUS" ] && \
      RPM_BUILD_NCPUS="`/usr/bin/getconf _NPROCESSORS_ONLN`"
 [ "$RPM_BUILD_NCPUS" -ge 2 ] && MOZ_SMP_FLAGS=-j2
 [ "$RPM_BUILD_NCPUS" -ge 4 ] && MOZ_SMP_FLAGS=-j4
 [ "$RPM_BUILD_NCPUS" -ge 8 ] && MOZ_SMP_FLAGS=-j8
-%endif
 
 MOZ_APP_DIR=%{_libdir}/%{name}
+
 make -f client.mk build STRIP="/bin/true" MOZ_MAKE_FLAGS="$MOZ_SMP_FLAGS"
 
 #---------------------------------------------------------------------
@@ -355,19 +724,34 @@ make -f client.mk build STRIP="/bin/true" MOZ_MAKE_FLAGS="$MOZ_SMP_FLAGS"
 cd %{tarballdir}
 %{__rm} -rf $RPM_BUILD_ROOT
 
+%if %{rhel} == 5
+# set up our default bookmarks
+%{__cp} -p %{SOURCE501} objdir/dist/bin/browser/defaults/profile/bookmarks.html
+%else
 # set up our default bookmarks
 # %{__cp} -p %{default_bookmarks_file} objdir/dist/bin/browser/defaults/profile/bookmarks.html
+%endif
 
 # Make sure locale works for langpacks
 %{__cat} > objdir/dist/bin/browser/defaults/preferences/firefox-l10n.js << EOF
 pref("general.useragent.locale", "chrome://global/locale/intl.properties");
 EOF
 
+
 DESTDIR=$RPM_BUILD_ROOT make -C objdir install
 
-# set up the start script
+%{__mkdir_p} $RPM_BUILD_ROOT{%{_libdir},%{_bindir},%{_datadir}/applications}
+
+# Set up the gconsole start script, unfortunatelly it is different for each RHEL
 rm -rf $RPM_BUILD_ROOT%{_bindir}/gconsole
-cp %{SOURCE21} $RPM_BUILD_ROOT%{_bindir}/gconsole
+FIREFOX_SH_SOURCE=%{SOURCE700}
+%if %{rhel} == 5
+  FIREFOX_SH_SOURCE=%{SOURCE500}
+%endif
+%if %{rhel} == 6
+  FIREFOX_SH_SOURCE=%{SOURCE600}
+%endif
+cp $FIREFOX_SH_SOURCE $RPM_BUILD_ROOT%{_bindir}/gconsole
 %{__chmod} 755 $RPM_BUILD_ROOT%{_bindir}/gconsole
 
 %{__rm} -f $RPM_BUILD_ROOT/%{mozappdir}/firefox-config
@@ -376,7 +760,7 @@ echo > ../%{name}.lang
 %if %{build_langpacks}
 # Extract langpacks, make any mods needed, repack the langpack, and install it.
 %{__mkdir_p} $RPM_BUILD_ROOT%{langpackdir}
-%{__tar} xf %{SOURCE1}
+%{__xz} -dc %{SOURCE1} | %{__tar} xf -
 for langpack in `ls firefox-langpacks/*.xpi`; do
   language=`basename $langpack .xpi`
   extensionID=langpack-$language@firefox.mozilla.org
@@ -396,12 +780,12 @@ done
 
 # Install langpack workaround (see #707100, #821169)
 function create_default_langpack() {
-language_long=$1
-language_short=$2
-cd $RPM_BUILD_ROOT%{langpackdir}
-ln -s langpack-$language_long@firefox.mozilla.org.xpi langpack-$language_short@firefox.mozilla.org.xpi
-cd -
-echo "%%lang($language_short) %{langpackdir}/langpack-$language_short@firefox.mozilla.org.xpi" >> ../%{name}.lang
+  language_long=$1
+  language_short=$2
+  cd $RPM_BUILD_ROOT%{langpackdir}
+  ln -s langpack-$language_long@firefox.mozilla.org.xpi langpack-$language_short@firefox.mozilla.org.xpi
+  cd -
+  echo "%%lang($language_short) %{langpackdir}/langpack-$language_short@firefox.mozilla.org.xpi" >> ../%{name}.lang
 }
 
 # Table of fallbacks for each language
@@ -428,6 +812,16 @@ ln -s %{mozappdir}/defaults/preferences $RPM_BUILD_ROOT/%{mozappdir}/browser/def
 
 # Install default ones
 %{__cp} %{SOURCE12} ${RPM_BUILD_ROOT}%{mozappdir}/defaults/preferences/all-redhat.js
+# Modify preset preferences
+%if %{use_baselinejit}
+  echo 'pref("javascript.options.baselinejit",      true);'  >> ${RPM_BUILD_ROOT}%{mozappdir}/defaults/preferences/all-redhat.js
+%else
+  echo '/* Workaround for rhbz#1134876 */'                   >> ${RPM_BUILD_ROOT}%{mozappdir}/defaults/preferences/all-redhat.js
+  echo 'pref("javascript.options.baselinejit",      false);' >> ${RPM_BUILD_ROOT}%{mozappdir}/defaults/preferences/all-redhat.js
+%endif
+
+# System config dir
+%{__mkdir_p} $RPM_BUILD_ROOT/%{_sysconfdir}/%{name}/pref
 
 # System extensions
 %{__mkdir_p} $RPM_BUILD_ROOT%{_datadir}/mozilla/extensions/%{firefox_app_id}
@@ -436,9 +830,15 @@ ln -s %{mozappdir}/defaults/preferences $RPM_BUILD_ROOT/%{mozappdir}/browser/def
 # Copy over the LICENSE
 %{__install} -p -c -m 644 LICENSE $RPM_BUILD_ROOT/%{mozappdir}
 
-# Use the system hunspell dictionaries for RHEL6+
-%{__rm} -rf ${RPM_BUILD_ROOT}%{mozappdir}/dictionaries
-ln -s %{_datadir}/myspell ${RPM_BUILD_ROOT}%{mozappdir}/dictionaries
+# Use the system dictionaries for system hunspell
+%if %{system_hunspell}
+  %{__rm} -rf ${RPM_BUILD_ROOT}%{mozappdir}/dictionaries
+  ln -s %{_datadir}/myspell ${RPM_BUILD_ROOT}%{mozappdir}/dictionaries
+%endif
+
+# Clean firefox-devel debuginfo
+rm -rf %{_prefix}/lib/debug/lib/%{name}-devel-*
+rm -rf %{_prefix}/lib/debug/lib64/%{name}-devel-*
 
 #---------------------------------------------------------------------
 
@@ -446,15 +846,6 @@ ln -s %{_datadir}/myspell ${RPM_BUILD_ROOT}%{mozappdir}/dictionaries
 %{__rm} -rf $RPM_BUILD_ROOT
 
 #---------------------------------------------------------------------
-
-%preun
-# is it a final removal?
-if [ $1 -eq 0 ]; then
-  %{__rm} -rf %{mozappdir}/components
-  %{__rm} -rf %{mozappdir}/extensions
-  %{__rm} -rf %{mozappdir}/langpacks
-  %{__rm} -rf %{mozappdir}/plugins
-fi
 
 %post
 update-desktop-database &> /dev/null || :
@@ -470,12 +861,21 @@ if [ $1 -eq 0 ] ; then
 fi
 update-desktop-database &> /dev/null || :
 
+%preun
+# is it a final removal?
+if [ $1 -eq 0 ]; then
+  %{__rm} -rf %{mozappdir}/components
+  %{__rm} -rf %{mozappdir}/extensions
+  %{__rm} -rf %{mozappdir}/plugins
+fi
+
 %posttrans
 gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
 
 %files -f %{name}.lang
 %defattr(-,root,root,-)
 %{_bindir}/gconsole
+%dir %{_sysconfdir}/%{name}/*
 %dir %{_datadir}/mozilla/extensions/%{firefox_app_id}
 %dir %{_libdir}/mozilla/extensions/%{firefox_app_id}
 %dir %{mozappdir}
@@ -487,10 +887,10 @@ gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
 %{mozappdir}/browser/components/*.manifest
 %attr(644, root, root) %{mozappdir}/browser/blocklist.xml
 %dir %{mozappdir}/browser/extensions
-%{mozappdir}/browser/extensions/{972ce4c6-7e08-4474-a285-3208198ce6fd}
+%{mozappdir}/browser/extensions/{972ce4c6-7e08-4474-a285-3208198ce6fd}.xpi
+%{mozappdir}/browser/features/loop@mozilla.org.xpi
 %dir %{mozappdir}/langpacks
 %{mozappdir}/browser/icons
-%{mozappdir}/browser/searchplugins
 %{mozappdir}/browser/omni.ja
 %{mozappdir}/gconsole
 %{mozappdir}/gconsole-bin
@@ -503,9 +903,6 @@ gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
 %dir %{mozappdir}/webapprt
 %{mozappdir}/webapprt/omni.ja
 %{mozappdir}/webapprt/webapprt.ini
-%{mozappdir}/chrome.manifest
-%{mozappdir}/components/*.so
-%{mozappdir}/components/*.manifest
 %{mozappdir}/dictionaries
 %{mozappdir}/*.so
 %{mozappdir}/omni.ja
@@ -513,26 +910,107 @@ gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
 %{mozappdir}/plugin-container
 %{mozappdir}/dependentlibs.list
 %exclude %{mozappdir}/defaults/pref/channel-prefs.js
-%{mozappdir}/gmp-clearkey
 %if !%{?system_nss}
 %{mozappdir}/*.chk
 %endif
-
-#we don't ship firefox-devel package
 %exclude %{_datadir}/idl/*
 %exclude %{_includedir}/*
 %exclude %{_libdir}/%{name}-devel-*/*
 
+%if !%{?system_nss}
+%{mozappdir}/libfreebl3.chk
+%{mozappdir}/libnssdbm3.chk
+%{mozappdir}/libsoftokn3.chk
+%endif
+
 #---------------------------------------------------------------------
 
 %changelog
-* Tue Jul  7 2015 ClearFoundation <developer@clearfoundation.com> - 38.1.0-1.v7
+* Fri Dec 16 2016 ClearFoundation <developer@clearfoundation.com> - 45.6.0-1.v7
 - Convert firefox to gconsole
 - Remove desktop shortcut and icons
 - Remove custom bookmarks
 
-* Thu Jul 02 2015 CentOS Sources <bugs@centos.org> - 38.1.0-1.el7.centos
+* Wed Dec 14 2016 CentOS Sources <bugs@centos.org> - 45.6.0-1.el7.centos
 - CentOS default prefs
+
+* Sun Dec 11 2016 Jan Horak <jhorak@redhat.com> - 45.6.0-1
+- Update to 45.6.0 ESR
+
+* Wed Nov 30 2016 Jan Horak <jhorak@redhat.com> - 45.5.1-1
+- Update to 45.5.1 ESR
+
+* Tue Nov  8 2016 Jan Horak <jhorak@redhat.com> - 45.5.0-1
+- Update to 45.5.0 ESR
+
+* Mon Oct 31 2016 Jan Horak <jhorak@redhat.com> - 45.4.0-3
+- Added upcoming upstream patches mozbz#1018486
+
+* Mon Sep 26 2016 Jan Horak <jhorak@redhat.com> - 45.4.0-2
+- Added Laszlo Ersek patch for aarch64 crashes
+
+* Wed Sep  7 2016 Jan Horak <jhorak@redhat.com> - 45.4.0-1
+- Update to 45.4.0 ESR
+
+* Wed Jul 27 2016 Jan Horak <jhorak@redhat.com> - 45.3.0-1
+- Update to 45.3.0 ESR
+
+* Mon Jul 11 2016 Martin Stransky <stransky@redhat.com> - 45.2.0-3
+- Added fix for mozbz#256180
+
+* Mon Jun 20 2016 Martin Stransky <stransky@redhat.com> - 45.2.0-2
+- Added fix for mozbz#975832, rhbz#1343202
+
+* Fri Jun  3 2016 Jan Horak <jhorak@redhat.com> - 45.2.0-1
+- Update to 45.2.0 ESR
+
+* Tue May 10 2016 Martin Stransky <stransky@redhat.com> - 45.1.1-2
+- Added fix for mozbz#1270046 - new Samba auth response
+
+* Wed May  4 2016 Jan Horak <jhorak@redhat.com> - 45.1.1-1
+- Update to 45.1.1 ESR
+
+* Tue May 3 2016 Martin Stransky <stransky@redhat.com> - 45.1.0-3
+- Disabled ffmpeg (rhbz#1330898)
+
+* Fri Apr 29 2016 Jan Horak <jhorak@redhat.com> - 45.1.0-1
+- Fixed some regressions introduced by rebase
+
+* Thu Apr 21 2016 Jan Horak <jhorak@redhat.com> - 45.1.0-1
+- Update to 45.1.0 ESR
+
+* Tue Apr 12 2016 Jan Horak <jhorak@redhat.com> - 45.0.2-1
+- Update to 45.0.2 ESR
+
+* Wed Apr  6 2016 Jan Horak <jhorak@redhat.com> - 45.0.1-1
+- Update to 45.0.1 ESR
+
+* Mon Apr  4 2016 Martin Stransky <stransky@redhat.com> - 45.0-5
+- Fixed crashed after start (rhbz#1323744, rhbz#1323738)
+
+* Mon Apr  4 2016 Jan Horak <jhorak@redhat.com> - 45.0-4
+- Added system-level location for configuring Firefox (rhbz#1206239)
+
+* Mon Mar  7 2016 Jan Horak <jhorak@redhat.com> - 45.0-3
+- Update to 45.0 ESR
+
+* Fri Dec 11 2015 Jan Horak <jhorak@redhat.com> - 38.5.0-3
+- Update to 38.5.0 ESR
+
+* Thu Oct 29 2015 Jan Horak <jhorak@redhat.com> - 38.4.0-1
+- Update to 38.4.0 ESR
+
+* Tue Sep 15 2015 Jan Horak <jhorak@redhat.com> - 38.3.0-2
+- Update to 38.3.0 ESR
+
+* Wed Aug 26 2015 Martin Stransky <stransky@redhat.com> - 38.2.1-1
+- Update to 38.2.1 ESR
+
+* Fri Aug  7 2015 Jan Horak <jhorak@redhat.com> - 38.2.0-4
+- Update to 38.2.0 ESR
+
+* Thu Aug  6 2015 Jan Horak <jhorak@redhat.com> - 38.1.1-1
+- Update to 38.1.1 ESR
 
 * Thu Jun 25 2015 Jan Horak <jhorak@redhat.com> - 38.1.0-1
 - Update to 38.1.0 ESR

@@ -1,6 +1,6 @@
-diff -ruN gconsole-45.6.0.old/firefox-45.6.0esr/browser/base/content/browser.xul gconsole-45.6.0/firefox-45.6.0esr/browser/base/content/browser.xul
---- gconsole-45.6.0.old/firefox-45.6.0esr/browser/base/content/browser.xul	2016-05-12 11:09:52.000000000 -0600
-+++ gconsole-45.6.0/firefox-45.6.0esr/browser/base/content/browser.xul	2016-12-16 13:37:26.900986267 -0700
+diff -ruN firefox-45.6.0esr/browser/base/content/browser.xul firefox-45.6.0esr/browser/base/content/browser.xul
+--- firefox-45.6.0esr/browser/base/content/browser.xul	2016-05-12 11:09:52.000000000 -0600
++++ firefox-45.6.0esr/browser/base/content/browser.xul	2016-12-16 13:37:26.900986267 -0700
 @@ -498,7 +498,7 @@
  
    <toolbox id="navigator-toolbox" mode="icons">
@@ -65,9 +65,9 @@ diff -ruN gconsole-45.6.0.old/firefox-45.6.0esr/browser/base/content/browser.xul
      <notificationbox id="global-notificationbox" notificationside="bottom"/>
      <toolbar id="developer-toolbar"
               hidden="true">
-diff -ruN gconsole-45.6.0.old/firefox-45.6.0esr/browser/base/content/nsContextMenu.js gconsole-45.6.0/firefox-45.6.0esr/browser/base/content/nsContextMenu.js
---- gconsole-45.6.0.old/firefox-45.6.0esr/browser/base/content/nsContextMenu.js	2016-05-12 11:09:52.000000000 -0600
-+++ gconsole-45.6.0/firefox-45.6.0esr/browser/base/content/nsContextMenu.js	2016-12-16 13:28:31.584091504 -0700
+diff -ruN firefox-45.6.0esr/browser/base/content/nsContextMenu.js firefox-45.6.0esr/browser/base/content/nsContextMenu.js
+--- firefox-45.6.0esr/browser/base/content/nsContextMenu.js	2016-05-12 11:09:52.000000000 -0600
++++ firefox-45.6.0esr/browser/base/content/nsContextMenu.js	2016-12-16 13:28:31.584091504 -0700
 @@ -145,7 +145,7 @@
  
      var shouldShow = this.onSaveableLink || isMailtoInternal || this.onPlainTextLink;
